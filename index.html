@@ -3,18 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>賓果賓果分析工具</title>
+
+    <!-- ===== SEO ===== -->
+    <title>拼狗拼狗 | 賓果賓果 Bingo Bingo 即時開獎統計分析</title>
+    <meta name="description" content="拼狗拼狗—賓果賓果（Bingo Bingo）開獎統計分析工具，提供台灣彩券即時開獎資料、號碼頻率熱力圖、熱號冷號排行、到期號分析、連帶號碼與綜合推薦號碼，每 5 分鐘自動更新。">
+    <meta name="keywords" content="拼狗拼狗,賓果賓果,Bingo Bingo,台灣彩券,開獎號碼,熱號,冷號,到期號,號碼分析,開獎統計,彩券分析">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="PinGou Analyzer">
+    <link rel="canonical" href="https://bingo.sportify.tw/">
+
+    <!-- ===== Favicon & Manifest ===== -->
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="shortcut icon" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="theme-color" content="#f59e0b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="拼狗拼狗">
+
+    <!-- ===== Open Graph ===== -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://bingo.sportify.tw/">
+    <meta property="og:image" content="https://bingo.sportify.tw/favicon.png">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta property="og:title" content="拼狗拼狗 | 賓果賓果 Bingo Bingo 即時開獎統計">
+    <meta property="og:description" content="拼狗拼狗—賓果賓果即時開獎統計：號碼頻率熱力圖、熱號冷號排行、到期號、連帶號碼分析，每 5 分鐘自動更新。">
+    <meta property="og:locale" content="zh_TW">
+    <meta property="og:site_name" content="拼狗拼狗">
+
+    <!-- ===== Twitter Card ===== -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://bingo.sportify.tw/favicon.png">
+    <meta name="twitter:title" content="拼狗拼狗 | 賓果賓果 Bingo Bingo 即時開獎統計">
+    <meta name="twitter:description" content="拼狗拼狗—賓果賓果即時開獎統計：號碼頻率熱力圖、熱號冷號排行、到期號、連帶號碼分析，每 5 分鐘自動更新。">
+
+    <!-- ===== Google Tag Manager ===== -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-5884CLNV');</script>
+
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5884CLNV"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
     <!-- 頂部標題 -->
     <header class="app-header">
         <div class="header-inner">
             <div class="header-title">
-                <h1> 賓果賓果分析工具</h1>
-                <p class="subtitle">台灣彩券 Bingo Bingo 即時開獎統計分析</p>
+                <a href="/" class="header-logo-link">
+                    <img src="/favicon.png" alt="拼狗拼狗" class="header-favicon" width="56" height="56">
+                </a>
+                <div class="header-text">
+                    <h1>拼狗拼狗 <span class="h1-sub">- 賓果賓果分析工具</span></h1>
+                    <p class="subtitle">台灣彩券 Bingo Bingo 即時開獎統計分析</p>
+                </div>
             </div>
             <div class="header-meta" id="headerMeta">
                 <span class="meta-date" id="metaDate"></span>

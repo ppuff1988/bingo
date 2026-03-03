@@ -56,9 +56,41 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 1.5rem;
-    padding: 1.5rem 2rem;
+    padding: 1.25rem 1rem;
     max-width: 1400px;
     margin: 0 auto;
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.header-logo-link {
+    display: inline-flex;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+
+.header-favicon {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    display: block;
+    /* 微光醒陰影讓 logo 浮起 */
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+    transition: transform 0.18s ease;
+}
+
+.header-logo-link:hover .header-favicon {
+    transform: scale(1.06);
+}
+
+.header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
 }
 
 .header-title h1 {
@@ -69,6 +101,16 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    line-height: 1.2;
+}
+
+.header-title h1 .h1-sub {
+    font-size: 1.1rem;
+    font-weight: 500;
+    background: none;
+    -webkit-text-fill-color: var(--text-secondary);
+    color: var(--text-secondary);
+    letter-spacing: 0;
 }
 
 .header-title .subtitle {
@@ -94,11 +136,15 @@ body {
     letter-spacing: 0.03em;
 }
 
+.meta-date:empty {
+    display: none;
+}
+
 /* API 狀態列 */
 .import-status {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 0 2rem;
+    padding: 0 1rem;
     font-size: 0.85rem;
     display: none;
 }
