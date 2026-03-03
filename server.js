@@ -18,7 +18,6 @@ const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
-const url   = require('url');
 
 // ─── 設定 ────────────────────────────────────────────────────
 const PORT        = 8081;
@@ -173,7 +172,7 @@ function serveStatic(req, res, reqPath) {
 // ─── 主要伺服器邏輯 ───────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
-    const parsed   = url.parse(req.url, true);
+    const parsed   = new URL(req.url, `http://localhost:${PORT}`);
     const pathname = parsed.pathname;
 
     // ── CORS（開發方便，只開放 localhost） ──
@@ -200,7 +199,7 @@ const server = http.createServer(async (req, res) => {
 
         // 取得查詢日期，預設為今天
         const today   = new Date();
-        const dateStr = parsed.query.openDate ||
+        const dateStr = parsed.searchParams.get('openDate') ||
             today.getFullYear() + '-' +
             String(today.getMonth() + 1).padStart(2, '0') + '-' +
             String(today.getDate()).padStart(2, '0');
