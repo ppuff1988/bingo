@@ -1,0 +1,13 @@
+# 統一換行符號處理
+* text=auto
+
+# 明確指定文字檔使用 LF
+*.html text eol=lf
+*.css  text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# 二進位檔不做轉換
+*.png  binary
+*.ico  binary

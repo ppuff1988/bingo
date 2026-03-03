@@ -1,0 +1,244 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>賓果賓果分析工具</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+    <!-- 頂部標題 -->
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="header-title">
+                <h1> 賓果賓果分析工具</h1>
+                <p class="subtitle">台灣彩券 Bingo Bingo 即時開獎統計分析</p>
+            </div>
+            <div class="header-meta" id="headerMeta">
+                <span class="meta-date" id="metaDate"></span>
+            </div>
+        </div>
+        <!-- API 狀態列 -->
+        <div class="import-status" id="importStatus"></div>
+    </header>
+
+    <main class="container">
+
+        <!-- ===== 控制列（sticky）===== -->
+        <div class="control-bar" id="controlBar">
+            <div class="data-summary" id="dataSummary"></div>
+            <div class="control-actions">
+                <button class="btn btn-refresh" id="btnRefreshAPI">
+                    <span class="btn-icon"></span> 重新整理今日開獎
+                </button>
+                <button class="btn btn-ghost" id="btnClearData">清除快取</button>
+            </div>
+        </div>
+
+        <!-- ===== 空資料狀態 ===== -->
+        <div class="empty-state" id="emptyState" style="display:none;">
+            <div class="empty-state-icon">🎱</div>
+            <h2 class="empty-state-title">尚未載入開獎資料</h2>
+            <p class="empty-state-desc">點擊右上角「重新整理今日開獎」載入今日資料<br>或等待系統自動重新載入</p>
+            <button class="btn btn-refresh empty-state-btn" id="btnEmptyRefresh">
+                <span class="btn-icon"></span> 立即載入今日開獎
+            </button>
+        </div>
+
+        <!-- ===== 1. 建議號碼 ===== -->
+        <section class="section suggestion-section" id="suggestionSection" style="display:none;">
+            <div class="section-header">
+                <h2> 綜合分析建議號碼</h2>
+                <p class="section-desc">主要推薦20個候選號碼，另提供 5 組各 3 號的組合建議供參考</p>
+            </div>
+            <div class="suggestion-container" id="suggestionContainer"></div>
+            <div class="suggestion-legend">
+                <span class="tag tag-hot">熱號動量</span>近期出現頻率持續上升
+                <span class="tag tag-overdue">到期號</span>連續多期未出現，可能回歸
+                <span class="tag tag-stable">穩定高頻</span>長期穩定高於平均値
+            </div>
+            <div class="group-section-title">🎯 5 組號碼組合建議</div>
+            <div class="group-container" id="groupContainer"></div>
+        </section>
+
+        <!-- ===== 2. 冷熱號排行 ===== -->
+        <section class="section ranking-section" id="rankingSection" style="display:none;">
+            <div class="section-header">
+                <h2> 冷熱號 &amp; 到期號排行</h2>
+                <p class="section-desc">統計近 50 期出現頻率，分析冷熱趨勢與最久未出現號碼</p>
+            </div>
+            <div class="ranking-grid">
+                <div class="ranking-panel">
+                    <h3> 熱門號碼 TOP 10</h3>
+                    <div class="ranking-list" id="hotRanking"></div>
+                </div>
+                <div class="ranking-panel">
+                    <h3> 冷門號碼 TOP 10</h3>
+                    <div class="ranking-list" id="coldRanking"></div>
+                </div>
+                <div class="ranking-panel">
+                    <h3> 到期號 TOP 10 <small>（最久未開出）</small></h3>
+                    <div class="ranking-list" id="overdueRanking"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 3. 頻率熱力圖 ===== -->
+        <section class="section heatmap-section" id="heatmapSection" style="display:none;">
+            <div class="section-header">
+                <h2> 號碼出現頻率熱力圖</h2>
+                <p class="section-desc">顏色越<span class="hot-text">深</span>代表出現越頻繁，顏色越<span class="cold-text">淡</span>代表出現越少</p>
+            </div>
+            <div class="heatmap-grid-container">
+                <div class="heatmap-panel">
+                    <h3>近 10 期</h3>
+                    <div class="heatmap-grid" id="heatmap10"></div>
+                    <div class="heatmap-legend">
+                        <span class="legend-label">低頻</span>
+                        <div class="legend-bar"></div>
+                        <span class="legend-label">高頻</span>
+                    </div>
+                </div>
+                <div class="heatmap-panel">
+                    <h3>近 30 期</h3>
+                    <div class="heatmap-grid" id="heatmap25"></div>
+                    <div class="heatmap-legend">
+                        <span class="legend-label">低頻</span>
+                        <div class="legend-bar"></div>
+                        <span class="legend-label">高頻</span>
+                    </div>
+                </div>
+                <div class="heatmap-panel">
+                    <h3>近 50 期</h3>
+                    <div class="heatmap-grid" id="heatmap50"></div>
+                    <div class="heatmap-legend">
+                        <span class="legend-label">低頻</span>
+                        <div class="legend-bar"></div>
+                        <span class="legend-label">高頻</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 4. 開獎分佈圖 ===== -->
+        <section class="section distribution-heatmap-section" id="distributionHeatmapSection" style="display:none;">
+            <div class="section-header">
+                <h2> 開獎分佈圖</h2>
+                <p class="section-desc">橫軸為號碼 180，縱軸為期數，標記處表示該期有開出該號碼</p>
+            </div>
+            <div class="distribution-controls">
+                <label>
+                    顯示期數：
+                    <select id="distributionPeriodSelect">
+                        <option value="10">最近 10 期</option>
+                        <option value="20">最近 20 期</option>
+                        <option value="30" selected>最近 30 期</option>
+                        <option value="50">最近 50 期</option>
+                        <option value="all">全部</option>
+                    </select>
+                </label>
+                <button class="btn btn-ghost btn-sm" id="btnDistFullscreen">⛶ 全畫面</button>
+            </div>
+            <div class="distribution-heatmap-container" id="distributionHeatmapContainer">
+                <div class="distribution-heatmap" id="distributionHeatmap"></div>
+            </div>
+            <p class="dist-scroll-hint">← 左右滑動可查看全部號碼 (1–80) →</p>
+        </section>
+
+        <!-- 開獎分佈圖全畫面 Overlay -->
+        <div class="dist-fullscreen-overlay" id="distFullscreenOverlay">
+            <div class="dist-fullscreen-header">
+                <h3>📊 開獎分佈圖</h3>
+                <div class="dist-fullscreen-header-controls">
+                    <label style="color:var(--text-secondary);font-size:0.88rem;">
+                        顯示期數：
+                        <select id="distributionPeriodSelectFs">
+                            <option value="10">最近 10 期</option>
+                            <option value="20">最近 20 期</option>
+                            <option value="30" selected>最近 30 期</option>
+                            <option value="50">最近 50 期</option>
+                            <option value="all">全部</option>
+                        </select>
+                    </label>
+                    <button class="btn btn-ghost btn-sm" id="btnDistClose">✕ 關閉</button>
+                </div>
+            </div>
+            <div class="dist-fullscreen-body">
+                <div class="dist-fullscreen-heatmap-wrap" id="distFullscreenHeatmapWrap">
+                    <div class="distribution-heatmap" id="distributionHeatmapFs"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 5. 對獎功能 ===== -->
+        <section class="section check-prize-section" id="checkPrizeSection" style="display:none;">
+            <div class="section-header">
+                <h2> 對獎功能</h2>
+                <p class="section-desc">輸入你的號碼，查詢歷史開獎紀錄中的命中次數</p>
+            </div>
+            <div class="check-prize-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>起始期數</label>
+                            <select id="drawRangeStart" class="input-draw">
+                                <option value="">（最早）</option>
+                            </select>
+                        </div>
+                        <div class="form-group form-group-center">
+                            <label>&nbsp;</label>
+                            <span class="range-sep">至</span>
+                        </div>
+                        <div class="form-group">
+                            <label>結束期數</label>
+                            <select id="drawRangeEnd" class="input-draw">
+                                <option value="">（最新）</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>對獎號碼（1～20 個，空格或逗號分隔）</label>
+                        <input type="text" id="prizeNumbers" placeholder="例如：5 12 23 34 45 56 67 78" class="input-numbers">
+                    </div>
+                    <button class="btn btn-primary btn-check-prize" id="btnCheckPrize">🔍 開始對獎</button>
+            </div>
+            <div class="check-prize-result" id="checkPrizeResult"></div>
+        </section>
+
+        <!-- ===== 6. 連帶號碼分析 ===== -->
+        <section class="section cooccurrence-section" id="cooccurrenceSection" style="display:none;">
+            <div class="section-header">
+                <h2>🔗 連帶號碼分析</h2>
+                <p class="section-desc">點選 1～4 個號碼，找出歷史開獎中最常與其一起出現的號碼</p>
+            </div>
+            <div class="cooc-controls">
+                <div class="cooc-range-row">
+                    <label>統計期數範圍：
+                        <select id="coocPeriodSelect">
+                            <option value="20">最近 20 期</option>
+                            <option value="50" selected>最近 50 期</option>
+                            <option value="100">最近 100 期</option>
+                            <option value="all">全部</option>
+                        </select>
+                    </label>
+                    <button class="btn btn-ghost btn-sm" id="btnClearCooc">清除選擇</button>
+                </div>
+                <p class="cooc-hint">點選號碼格（最多 4 個）即可查詢連帶出現頻率</p>
+            </div>
+            <div class="cooc-body">
+                <div class="cooc-picker" id="coocPicker"></div>
+                <div class="cooc-result" id="coocResult"></div>
+            </div>
+        </section>
+
+        <!-- 免責聲明 -->
+        <footer class="disclaimer" id="disclaimer" style="display:none;">
+            <p> <strong>免責聲明：</strong>本工具僅供娛樂參考。彩券每期開獎為獨立隨機事件，歷史頻率分析<strong>無法提高中獎機率</strong>。請理性投注，量力而為。</p>
+        </footer>
+
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

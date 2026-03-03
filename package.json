@@ -1,0 +1,10 @@
+{
+  "name": "bingo-analyzer",
+  "version": "1.0.0",
+  "description": "台灣彩券賓果賓果分析工具（含檔案快取代理）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  }
+}
