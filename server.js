@@ -98,6 +98,26 @@ function writeCache(filePath, data) {
     }
 }
 
+// ─── 台灣時間與開獎時段輔助 ─────────────────────────────────────
+
+/** 取得台灣標準時間（UTC+8）的 Date 物件 */
+function getTaiwanNow() {
+    const now = new Date();
+    return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+}
+
+/**
+ * 判斷目前是否在開獎時段（每日 07:05–23:55）
+ * 賓果賓果週一至週日 07:05 開始，每 5 分鐘一期，最後一期 23:55
+ * @param {Date} [twDate]  台灣時間 Date，省略時自動取得
+ * @returns {boolean}
+ */
+function isDrawingTime(twDate) {
+    const d    = twDate || getTaiwanNow();
+    const mins = d.getHours() * 60 + d.getMinutes();
+    return mins >= 7 * 60 + 5 && mins <= 23 * 60 + 55;
+}
+
 // ─── 台灣彩券 API 請求 ────────────────────────────────────────
 
 /**
@@ -220,7 +240,35 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ② 呼叫台灣彩券 API（每 5 分鐘最多一次）
+        // ② 非開獎時間保護（僅限查詢今日資料時生效）
+        const twNow     = getTaiwanNow();
+        const twDateStr = twNow.getFullYear() + '-' +
+            String(twNow.getMonth() + 1).padStart(2, '0') + '-' +
+            String(twNow.getDate()).padStart(2, '0');
+        const isTodayQuery = (dateStr === twDateStr);
+
+        if (isTodayQuery && !isDrawingTime(twNow)) {
+            // 非開獎時間：有舊快取就回傳舊快取，否則回傳提示訊息
+            const stale = readCache(cacheFile);
+            if (stale) {
+                console.log(`[非開獎時間] ${dateStr} — 回傳現有快取，不呼叫上游 API（開獎時段 07:05-23:55）`);
+                res.setHeader('X-Cache', 'STALE');
+                res.setHeader('X-Non-Draw-Time', '1');
+                res.writeHead(200);
+                res.end(stale);
+                return;
+            }
+            console.log(`[非開獎時間] ${dateStr} — 無快取可用，回傳非開獎時間通知`);
+            res.setHeader('X-Non-Draw-Time', '1');
+            res.writeHead(200);
+            res.end(JSON.stringify({
+                rtCode : 'NON_DRAW_TIME',
+                message: '目前非開獎時間（每日 07:05–23:55），請在開獎時段再查詢'
+            }));
+            return;
+        }
+
+        // ③ 呼叫台灣彩券 API（每 5 分鐘最多一次）
         console.log(`[API 請求 ] ${dateStr} — 快取過期或不存在，向台灣彩券 API 請求…`);
 
         try {

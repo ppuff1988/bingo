@@ -30,8 +30,12 @@
         <div class="control-bar" id="controlBar">
             <div class="data-summary" id="dataSummary"></div>
             <div class="control-actions">
+                <div class="date-picker-wrap">
+                    <label class="date-picker-label" for="datePicker">📅 日期</label>
+                    <input type="date" id="datePicker" class="date-picker-input">
+                </div>
                 <button class="btn btn-refresh" id="btnRefreshAPI">
-                    <span class="btn-icon"></span> 重新整理今日開獎
+                    <span class="btn-icon">🔄</span> <span id="btnRefreshLabel">重新整理</span>
                 </button>
                 <button class="btn btn-ghost" id="btnClearData">清除快取</button>
             </div>
@@ -41,7 +45,7 @@
         <div class="empty-state" id="emptyState" style="display:none;">
             <div class="empty-state-icon">🎱</div>
             <h2 class="empty-state-title">尚未載入開獎資料</h2>
-            <p class="empty-state-desc">點擊右上角「重新整理今日開獎」載入今日資料<br>或等待系統自動重新載入</p>
+            <p class="empty-state-desc">點擊上方「🔄 重新整理」載入資料<br>或透過日曆選擇日期查詢歷史開獎</p>
             <button class="btn btn-refresh empty-state-btn" id="btnEmptyRefresh">
                 <span class="btn-icon"></span> 立即載入今日開獎
             </button>

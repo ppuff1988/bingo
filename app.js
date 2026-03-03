@@ -36,6 +36,8 @@
     const dataSummary  = $('#dataSummary');
     const btnClearData = $('#btnClearData');
     const btnRefreshAPI = $('#btnRefreshAPI');
+    const datePicker    = $('#datePicker');
+    const btnRefreshLabel = $('#btnRefreshLabel');
     const heatmapSection = $('#heatmapSection');
     const rankingSection = $('#rankingSection');
     const suggestionSection = $('#suggestionSection');
@@ -61,6 +63,9 @@
     const coocPeriodSelect = $('#coocPeriodSelect');
     const btnClearCooc = $('#btnClearCooc');
     const emptyState = $('#emptyState');
+
+    // ─── 選取日期狀態 ─────────────────────────────────────────────
+    let selectedDateStr = '';   // 目前正在查看的日期 YYYY-MM-DD
 
     // ─── Co-occurrence state ──────────────────────────────────────
     let coocSelected = []; // up to 4 selected numbers
@@ -1124,36 +1129,63 @@
     //  9. Storage & Status
     // ─────────────────────────────────────────────────────────────
 
+    /** 取得今日日期字串（台灣時區）YYYY-MM-DD */
+    function getTodayStr() {
+        const twn = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        return twn.getFullYear() + '-' +
+            String(twn.getMonth() + 1).padStart(2, '0') + '-' +
+            String(twn.getDate()).padStart(2, '0');
+    }
+
     function showStatus(type, msg) {
         importStatus.className = 'import-status ' + type;
         importStatus.innerHTML = msg;
         importStatus.style.display = 'block';
     }
 
-    function saveToStorage() {
+    /**
+     * 將開獎資料寫入 localStorage
+     * @param {string} dateStr YYYY-MM-DD
+     */
+    function saveToStorage(dateStr) {
         try {
-            localStorage.setItem('bingo_draws', JSON.stringify(draws));
-            localStorage.setItem('bingo_last_fetch', String(Date.now()));
-        } catch (e) { /* ignore */ }
-    }
-
-    function loadFromStorage() {
-        try {
-            const d = localStorage.getItem('bingo_draws');
-            if (d) draws = JSON.parse(d);
+            localStorage.setItem(`bingo_draws_${dateStr}`, JSON.stringify(draws));
+            localStorage.setItem(`bingo_last_fetch_${dateStr}`, String(Date.now()));
         } catch (e) { /* ignore */ }
     }
 
     /**
-     * 判斷瀏覽器 localStorage 快取是否仍在有效期（< 5 分鐘）
+     * 從 localStorage 讀取指定日期開獎資料
+     * @param {string} dateStr YYYY-MM-DD
+     * @returns {boolean} 是否有資料
+     */
+    function loadFromStorage(dateStr) {
+        try {
+            const d = localStorage.getItem(`bingo_draws_${dateStr}`);
+            if (d) { draws = JSON.parse(d); return true; }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
+    /**
+     * 判斷指定日期的 localStorage 快取狀態
+     * - 今日：TTL = 5 分鐘
+     * - 歷史日期：最终結果不會再變更，有快取即視為永久新鮮
+     * @param {string} dateStr YYYY-MM-DD
      * @returns {{ fresh: boolean, ageMs: number, remainMs: number }}
      */
-    function getBrowserCacheStatus() {
+    function getBrowserCacheStatus(dateStr) {
         try {
-            const lastFetch = parseInt(localStorage.getItem('bingo_last_fetch') || '0', 10);
-            const ageMs     = Date.now() - lastFetch;
+            const todayStr  = getTodayStr();
+            const lastFetch = parseInt(localStorage.getItem(`bingo_last_fetch_${dateStr}`) || '0', 10);
+            if (!lastFetch) return { fresh: false, ageMs: Infinity, remainMs: 0 };
+            // 歷史日期：永久新鮮
+            if (dateStr !== todayStr) {
+                return { fresh: true, ageMs: Date.now() - lastFetch, remainMs: Infinity };
+            }
+            const ageMs = Date.now() - lastFetch;
             return {
-                fresh    : lastFetch > 0 && ageMs < CACHE_TTL_MS,
+                fresh    : ageMs < CACHE_TTL_MS,
                 ageMs,
                 remainMs : Math.max(0, CACHE_TTL_MS - ageMs),
             };
@@ -1347,28 +1379,91 @@
 
     // Refresh API button（強制略過快取，直接打 API）
     btnRefreshAPI.addEventListener('click', () => {
-        fetchTodayFromAPI(true);
+        const target = selectedDateStr || getTodayStr();
+        const isTgt  = target === getTodayStr();
+        // 今日且非開獎時間 → 顯示提醒（但仍允許執行，讓使用者決定）
+        if (isTgt && !isDrawingTime()) {
+            showStatus('warning',
+                `🕐 <strong>目前非開獎時間</strong>（開獎時段：每日 07:05 – 23:55）<br>` +
+                `目前時段 API 不會有新資料，已強制刷新`);
+        }
+        fetchDataForDate(target, true);
     });
 
-    // Clear data
+    // Clear data（只清除今日快取，保留歷史日期資料）
     btnClearData.addEventListener('click', () => {
+        const todayStr = getTodayStr();
+        localStorage.removeItem(`bingo_draws_${todayStr}`);
+        localStorage.removeItem(`bingo_last_fetch_${todayStr}`);
         draws = [];
-        localStorage.removeItem('bingo_draws');
-        localStorage.removeItem('bingo_last_fetch');
         importStatus.className = 'import-status';
         importStatus.innerHTML = '';
+        selectedDateStr = todayStr;
+        if (datePicker) datePicker.value = todayStr;
+        if (btnRefreshLabel) btnRefreshLabel.textContent = '重新整理';
         refreshAll();
+        showStatus('warning', `🗑️ 已清除 ${todayStr} 的快取，歷史日期資料保留不變`);
     });
 
     // Empty state 的「立即載入」按鈕（與重新整理同行為）
     const btnEmptyRefresh = $('#btnEmptyRefresh');
     if (btnEmptyRefresh) {
-        btnEmptyRefresh.addEventListener('click', () => fetchTodayFromAPI(true));
+        btnEmptyRefresh.addEventListener('click', () => {
+            const target = selectedDateStr || getTodayStr();
+            fetchDataForDate(target, true);
+        });
+    }
+
+    // 日曆切換 → 清除現有資料後載入選取日期
+    if (datePicker) {
+        datePicker.addEventListener('change', () => {
+            const picked = datePicker.value;
+            if (!picked) return;
+            draws = [];   // 清除避免顯示前一天分析結果
+            refreshAll(); // 先清空畫面
+            fetchDataForDate(picked, false);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  10b. API Auto-Fetch
+    //  10b. API Auto-Fetch — 開獎時段工具函式 & 主要載入函式
     // ─────────────────────────────────────────────────────────────
+
+    /**
+     * 判斷目前是否在開獎時段（每日 07:05–23:55，台灣標準時間）
+     * 賓果賓果週一至週日 07:05 開始，每 5 分鐘一期，最後一期 23:55
+     * @returns {boolean}
+     */
+    function isDrawingTime() {
+        const now  = new Date();
+        // 轉換成台灣標準時間（UTC+8）
+        const twn  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        const mins = twn.getHours() * 60 + twn.getMinutes();
+        return mins >= 7 * 60 + 5 && mins <= 23 * 60 + 55;
+    }
+
+    /**
+     * 距離下次開獎時段開始的毫秒數
+     * - 若目前在 00:00–07:04 → 距今日 07:05 的毫秒數
+     * - 若目前在 23:56–23:59 → 距明日 07:05 的毫秒數
+     * @returns {number}
+     */
+    function msUntilDrawingStarts() {
+        const now  = new Date();
+        const twn  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        const h    = twn.getHours();
+        const m    = twn.getMinutes();
+        const s    = twn.getSeconds();
+        const ms   = twn.getMilliseconds();
+        const currentMs  = ((h * 60 + m) * 60 + s) * 1000 + ms;
+        const drawStartMs = (7 * 60 + 5) * 60 * 1000;   // 07:05 in ms since midnight
+        if (currentMs < drawStartMs) {
+            return drawStartMs - currentMs;
+        }
+        // 已超過 23:55，等到隔日 07:05
+        const midnightMs = 24 * 60 * 60 * 1000;
+        return midnightMs - currentMs + drawStartMs;
+    }
 
     /**
      * 自動從台灣彩券 API 載入今日 (openDate = 今天 YYYY-MM-DD) 開獎資料
@@ -1381,38 +1476,77 @@
      *   bingoQueryResult[i].bigShowOrder  排序後 20 個號碼字串陣列, e.g. ["01","07",...]
      */
     /**
-     * 載入今日開獎資料（含三層快取保護）
+     * 載入指定日期開獎資料（含多層快取保護）
      *
-     * 快取優先順序：
+     * 快取優先順序（僅限今日）：
      *   1. 瀏覽器 localStorage（最快，無網路請求）
      *   2. 本地 server.js 檔案快取（/api/bingo）
      *   3. 台灣彩券 API（直打，最後手段）
+     * 歷史日期：直接走第 2 → 3 層，不讀寫 localStorage。
      *
-     * @param {boolean} forceRefresh - true 時略過所有快取，強制打 API
+     * @param {string}  targetDateStr  目標日期 YYYY-MM-DD（省略則使用今天）
+     * @param {boolean} forceRefresh   true 時略過所有快取，強制打 API
      */
-    async function fetchTodayFromAPI(forceRefresh = false) {
-        const today   = new Date();
-        const dateStr = today.getFullYear() + '-' +
-            String(today.getMonth() + 1).padStart(2, '0') + '-' +
-            String(today.getDate()).padStart(2, '0');
+    async function fetchDataForDate(targetDateStr, forceRefresh = false) {
+        const todayStr = getTodayStr();
+        const dateStr  = targetDateStr || todayStr;
+        const isToday  = dateStr === todayStr;
 
-        // ── 第一層：瀏覽器 localStorage 快取 ──────────────────────
+        // 記錄目前選取日期
+        selectedDateStr = dateStr;
+
+        // 同步日曆控制項
+        if (datePicker && datePicker.value !== dateStr) datePicker.value = dateStr;
+
+        // 更新重新整理按鈕標籤
+        if (btnRefreshLabel) {
+            btnRefreshLabel.textContent = isToday ? '重新整理' : '重新載入此日';
+        }
+
+        // ── 非開獎時間保護（今天的自動排程呼叫才擋）──────────────
+        if (isToday && !forceRefresh && !isDrawingTime()) {
+            const msUntil   = msUntilDrawingStarts();
+            const hh        = Math.floor(msUntil / 3_600_000);
+            const mm        = Math.floor((msUntil % 3_600_000) / 60_000);
+            const ss        = Math.floor((msUntil % 60_000) / 1000);
+            const countdown = hh > 0
+                ? `${hh} 時 ${mm} 分 ${ss} 秒`
+                : mm > 0 ? `${mm} 分 ${ss} 秒` : `${ss} 秒`;
+            showStatus('warning',
+                `🕐 <strong>目前非開獎時間</strong>（開獎時段：每日 07:05 – 23:55）<br>` +
+                `距下次開獎開始還有 <strong>${countdown}</strong>，已暫停自動更新`);
+            // 仍讀取本機快取以顯示歷史分析資料
+            loadFromStorage(dateStr);
+            if (draws.length > 0) refreshAll();
+            // 自動排程：等到開獎時段才重新嘗試
+            setTimeout(() => fetchDataForDate(todayStr), msUntil + 5000);
+            return false;
+        }
+
+        // ── 第一層：瀏覽器 localStorage 快取（所有日期共用）────────────
         if (!forceRefresh) {
-            const cacheStatus = getBrowserCacheStatus();
+            const cacheStatus = getBrowserCacheStatus(dateStr);
             if (cacheStatus.fresh) {
-                loadFromStorage();
+                loadFromStorage(dateStr);
                 if (draws.length > 0) {
-                    const ageMin    = Math.floor(cacheStatus.ageMs / 60000);
-                    const ageSec    = Math.floor((cacheStatus.ageMs % 60000) / 1000);
-                    const remainMin = Math.floor(cacheStatus.remainMs / 60000);
-                    const remainSec = Math.floor((cacheStatus.remainMs % 60000) / 1000);
-                    showStatus('success',
-                        `✅ 使用本機快取（更新於 ${ageMin}m${ageSec}s 前），已載入 <strong>${draws.length}</strong> 期開獎資料` +
-                        `　<span style="opacity:.6">下次更新約 ${remainMin}m${remainSec}s 後</span>`);
-                    if (metaDate) metaDate.textContent = `${dateStr} · ${draws.length} 期（快取）`;
+                    if (isToday) {
+                        const ageMin    = Math.floor(cacheStatus.ageMs / 60000);
+                        const ageSec    = Math.floor((cacheStatus.ageMs % 60000) / 1000);
+                        const remainMin = Math.floor(cacheStatus.remainMs / 60000);
+                        const remainSec = Math.floor((cacheStatus.remainMs % 60000) / 1000);
+                        showStatus('success',
+                            `✅ 使用本機快取（更新於 ${ageMin}m${ageSec}s 前），已載入 <strong>${draws.length}</strong> 期開獎資料` +
+                            `　<span style="opacity:.6">下次更新約 ${remainMin}m${remainSec}s 後</span>`);
+                        // 自動排程：快取過期後再刷新
+                        setTimeout(() => fetchDataForDate(todayStr), cacheStatus.remainMs + 2000);
+                    } else {
+                        showStatus('success',
+                            `✅ 使用本機快取，已載入 ${dateStr} 共 <strong>${draws.length}</strong> 期歷史開獎資料`);
+                    }
+                    if (metaDate) metaDate.textContent = isToday
+                        ? `${dateStr} · ${draws.length} 期（快取）`
+                        : `${dateStr} · ${draws.length} 期（歷史快取）`;
                     refreshAll();
-                    // 自動排程：快取過期後再刷新
-                    setTimeout(() => fetchTodayFromAPI(), cacheStatus.remainMs + 2000);
                     return true;
                 }
             }
@@ -1424,14 +1558,22 @@
 
         showStatus('', `⏳ 正在載入 <strong>${dateStr}</strong> 開獎資料…`);
 
-        // 先嘗試本地代理，失敗才直打台灣彩券 API
         let json = null;
         let usedSource = '';
 
         try {
             const resp = await fetch(localUrl);
             if (!resp.ok) throw new Error(`代理 HTTP ${resp.status}`);
-            json       = await resp.json();
+            json = await resp.json();
+            // 伺服器回傳非開獎時間通知
+            if (json.rtCode === 'NON_DRAW_TIME') {
+                showStatus('warning',
+                    `🕐 <strong>伺服器確認：目前非開獎時間</strong><br>${json.message}`);
+                loadFromStorage(dateStr);
+                if (draws.length > 0) refreshAll();
+                if (isToday) setTimeout(() => fetchDataForDate(todayStr), msUntilDrawingStarts() + 5000);
+                return false;
+            }
             usedSource = resp.headers.get('X-Cache') === 'HIT' ? '本地檔案快取' : '台灣彩券 API（經代理）';
         } catch (proxyErr) {
             console.warn('[快取] 本地代理無法連線，直接呼叫台灣彩券 API：', proxyErr.message);
@@ -1441,11 +1583,11 @@
                 json       = await resp.json();
                 usedSource = '台灣彩券 API（直連）';
             } catch (directErr) {
-                // ── 第三層：讀舊的 localStorage 快取（stale）────────
                 showStatus('error', `❌ 載入失敗：${directErr.message}`);
-                loadFromStorage();
-                if (draws.length > 0) {
-                    showStatus('warning', `⚠️ 使用上次快取資料（可能非最新），共 <strong>${draws.length}</strong> 期`);
+                // API 失敗時，嘗試讀取 stale localStorage（所有日期共用）
+                const hasStale = loadFromStorage(dateStr);
+                if (hasStale && draws.length > 0) {
+                    showStatus('warning', `⚠️ 使用本機快取資料（${isToday ? '可能非最新' : '歷史快Cache'}），共 <strong>${draws.length}</strong> 期`);
                     refreshAll();
                 }
                 return false;
@@ -1480,14 +1622,17 @@
         }
 
         draws = parsed;
-        saveToStorage();   // ← 同時寫入時間戳
-        if (metaDate) metaDate.textContent = `${dateStr} · ${parsed.length} 期`;
+        // 所有日期皆寫入 localStorage（歷史日期資料不變，永久快取）
+        saveToStorage(dateStr);
+        if (metaDate) metaDate.textContent = isToday
+            ? `${dateStr} · ${parsed.length} 期`
+            : `${dateStr} · ${parsed.length} 期（歷史）`;
         showStatus('success',
-            `✅ 已載入 <strong>${parsed.length}</strong> 期開獎資料（來源：${usedSource}）`);
+            `✅ 已載入 <strong>${parsed.length}</strong> 期${isToday ? '' : '歷史'}開獎資料（來源：${usedSource}）`);
         refreshAll();
 
-        // 自動排程：5 分鐘後再刷新（對齊下一期開獎）
-        setTimeout(() => fetchTodayFromAPI(), CACHE_TTL_MS + 2000);
+        // 自動排程：只有今日才啟動（5 分鐘後再刷新對齊下一期開獎）
+        if (isToday) setTimeout(() => fetchDataForDate(todayStr), CACHE_TTL_MS + 2000);
         return true;
     }
 
@@ -1498,7 +1643,14 @@
     // 初始控制列文字（載入完成後由 refreshAll 覆蓋）
     dataSummary.innerHTML = '<span style="opacity:.5">正在載入…</span>';
 
+    // 日曆初始化：預設今天，禁止選未來日期
+    if (datePicker) {
+        const todayInit = getTodayStr();
+        datePicker.value = todayInit;
+        datePicker.max   = todayInit;
+    }
+
     // 頁面開啟→自動載入（優先讀快取，避免不必要的 API 呼叫）
-    fetchTodayFromAPI();
+    fetchDataForDate(getTodayStr());
 
 })();
