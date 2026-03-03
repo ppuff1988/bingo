@@ -288,6 +288,25 @@
             </div>
         </section>
 
+        <!-- ===== 7. Poisson Clumping Heuristic ===== -->
+        <section class="section pch-section" id="pchSection" style="display:none;">
+            <div class="section-header">
+                <h2>📐 Poisson 叢集啟發分析</h2>
+                <p class="section-desc">對每個號碼計算 Z 分數、p 值與叢集行為，標示統計顯著的過熱、過冷、超長斷號、叢集出現號碼</p>
+            </div>
+            <div class="pch-controls">
+                <label>分析期數：
+                    <select id="pchPeriodSelect">
+                        <option value="50">最近 50 期</option>
+                        <option value="100" selected>最近 100 期</option>
+                        <option value="200">最近 200 期</option>
+                        <option value="all">全部</option>
+                    </select>
+                </label>
+            </div>
+            <div id="pchContent"></div>
+        </section>
+
         <!-- 免責聲明 -->
         <footer class="disclaimer" id="disclaimer" style="display:none;">
             <p> <strong>免責聲明：</strong>本工具僅供娛樂參考。彩券每期開獎為獨立隨機事件，歷史頻率分析<strong>無法提高中獎機率</strong>。請理性投注，量力而為。</p>

@@ -2018,3 +2018,208 @@ body {
     }
 }
 
+/* ============================================================
+   Poisson Clumping Heuristic (PCH) Section
+   ============================================================ */
+
+/* ── 期數控制列 ── */
+.pch-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.pch-controls label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.pch-controls select {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+/* ── 統計摘要列 ── */
+.pch-meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+.pch-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 1rem;
+    min-width: 110px;
+    flex: 1 1 100px;
+}
+.pch-meta-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.pch-meta-val {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ── 信號分組 ── */
+.pch-group {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+.pch-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.pch-signal-hot   .pch-group-header { background: rgba(239,68,68,0.10); }
+.pch-signal-cold  .pch-group-header { background: rgba(59,130,246,0.10); }
+.pch-signal-streak .pch-group-header { background: rgba(124,58,237,0.10); }
+.pch-signal-cluster .pch-group-header { background: rgba(234,179,8,0.10); }
+
+.pch-group-icon { font-size: 1.3rem; flex-shrink: 0; }
+.pch-group-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: block;
+}
+.pch-group-desc {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: block;
+}
+.pch-group-count {
+    margin-left: auto;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.pch-no-signal {
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ── 號碼卡片列表 ── */
+.pch-card-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+.pch-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.65rem;
+}
+.pch-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.88rem;
+    flex-shrink: 0;
+}
+.pch-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.75rem;
+}
+.pch-stat-z { font-weight: 700; font-size: 0.82rem; }
+.pch-stat-z.pos { color: #f87171; }
+.pch-stat-z.neg { color: #60a5fa; }
+.pch-stat-freq { color: var(--text-secondary); }
+.pch-stat-extra { color: #a78bfa; }
+.pch-stat-p { color: var(--text-muted); font-size: 0.72rem; }
+
+/* ── Z 分數全覽格 ── */
+.pch-zscore-section {
+    margin-top: 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+.pch-zscore-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+.pch-zscore-hint {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+.pch-z-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+}
+.pch-z-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    padding: 4px 2px;
+    cursor: default;
+    min-height: 48px;
+    position: relative;
+    transition: transform 0.12s;
+}
+.pch-z-cell:hover { transform: scale(1.12); z-index: 2; }
+.pch-z-num { font-size: 0.72rem; font-weight: 800; line-height: 1; }
+.pch-z-val { font-size: 0.62rem; line-height: 1; margin-top: 2px; }
+.pch-z-sig { font-size: 0.58rem; line-height: 1; margin-top: 1px; }
+
+/* ── PCH 原理說明 ── */
+.pch-explainer {
+    margin-top: 1rem;
+    background: rgba(59,130,246,0.06);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+.pch-explainer strong { color: #93c5fd; }
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+    .pch-z-grid { grid-template-columns: repeat(8, 1fr); gap: 3px; }
+    .pch-z-cell { min-height: 40px; }
+    .pch-z-num { font-size: 0.65rem; }
+    .pch-z-val { font-size: 0.55rem; }
+    .pch-meta-bar { gap: 0.5rem; }
+    .pch-meta-item { min-width: 80px; padding: 0.45rem 0.75rem; }
+}

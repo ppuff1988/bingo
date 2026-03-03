@@ -63,6 +63,7 @@
     const coocPeriodSelect = $('#coocPeriodSelect');
     const btnClearCooc = $('#btnClearCooc');
     const emptyState = $('#emptyState');
+    const pchPeriodSelect = $('#pchPeriodSelect');
 
     // ─── 選取日期狀態 ─────────────────────────────────────────────
     let selectedDateStr = '';   // 目前正在查看的日期 YYYY-MM-DD
@@ -296,6 +297,208 @@
 
         gaps.sort((a, b) => b.currentGap - a.currentGap || a.number - b.number);
         return gaps;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Poisson Clumping Heuristic (PCH) — 最近 100 期分析
+    //  David Aldous 1989：稀少事件傾向「叢集」出現
+    //  p = 20/80 = 0.25；n = 100；μ = 25；σ ≈ 4.33
+    // ─────────────────────────────────────────────────────────────
+
+    const PCH_DEFAULT_N = 100; // 預設期數
+
+    /** 標準常態 CDF — Abramowitz & Stegun 7.1.26 近似（誤差 < 1.5e-7）*/
+    function normalCDF(z) {
+        if (z < -6) return 0;
+        if (z >  6) return 1;
+        const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+        const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+        const sign = z < 0 ? -1 : 1;
+        const x = Math.abs(z) / Math.SQRT2;
+        const t = 1 / (1 + p * x);
+        const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+        return 0.5 * (1 + sign * y);
+    }
+
+    /**
+     * 對每個號碼執行 Poisson 叢集啟發分析
+     * @param {object[]} data        draws 陣列
+     * @param {number|string} reqN   要分析的期數（'all' 代表全部）
+     * @returns {{ results, n, mu, sigma, theoMaxGap, theoMaxRun }}
+     */
+    function calcPCH(data, reqN) {
+        const n     = (reqN === 'all') ? data.length : Math.min(parseInt(reqN) || PCH_DEFAULT_N, data.length);
+        const slice = data.slice(0, n);
+
+        // 依實際 n 動態計算理論值
+        const mu          = n * EXPECTED_PROB;
+        const sigma       = Math.sqrt(n * EXPECTED_PROB * (1 - EXPECTED_PROB));
+        const theoMaxGap  = Math.log(n) / (-Math.log(1 - EXPECTED_PROB)); // E[最大冷條]
+        const theoMaxRun  = Math.log(n * (1 - EXPECTED_PROB)) / Math.log(1 / EXPECTED_PROB); // E[最大熱連]
+
+        const results = [];
+
+        for (let num = 1; num <= TOTAL_NUMBERS; num++) {
+            // 1. 出現頻率
+            const freq = slice.filter(d => d.numbers.includes(num)).length;
+            const z    = sigma > 0 ? (freq - mu) / sigma : 0;
+
+            // 2. 單尾 p 值（常態近似）
+            const pHot  = +(1 - normalCDF(z)).toFixed(4);  // P(X >= freq)
+            const pCold = +normalCDF(z).toFixed(4);         // P(X <= freq)
+
+            // 3. 目前冷條（距上次出現的期數）
+            let currentGap = 0;
+            for (let i = 0; i < slice.length; i++) {
+                if (slice[i].numbers.includes(num)) break;
+                currentGap++;
+            }
+            if (currentGap === slice.length) currentGap = slice.length;
+
+            // 4. 最長熱連（連續出現的最大期數）
+            let maxRun = 0, curRun = 0;
+            for (const draw of slice) {
+                if (draw.numbers.includes(num)) { curRun++; if (curRun > maxRun) maxRun = curRun; }
+                else { curRun = 0; }
+            }
+
+            // 5. 叢集次數（每段連續出現算一個叢集）
+            let clumpCount = 0, prevIn = false;
+            for (const draw of slice) {
+                const inDraw = draw.numbers.includes(num);
+                if (inDraw && !prevIn) clumpCount++;
+                prevIn = inDraw;
+            }
+            const clumpRatio = mu > 0 ? +(clumpCount / mu).toFixed(3) : 1;
+
+            // 6. 信號（以動態理論值為門檻）
+            const signals = [];
+            if (z >= 2.0)                              signals.push('hot');
+            if (z <= -2.0)                             signals.push('cold');
+            if (currentGap >= Math.ceil(theoMaxGap))   signals.push('streak');
+            if (maxRun >= Math.ceil(theoMaxRun) + 1)   signals.push('cluster');
+
+            results.push({ number: num, freq, z: +z.toFixed(2), pHot, pCold,
+                           currentGap, maxRun, clumpCount, clumpRatio, signals });
+        }
+
+        results.sort((a, b) => b.z - a.z);
+        return { results, n, mu: +mu.toFixed(1), sigma: +sigma.toFixed(2),
+                 theoMaxGap, theoMaxRun };
+    }
+
+    /** 渲染 PCH 分析區塊 */
+    function renderPCH(data) {
+        const pchSection  = document.getElementById('pchSection');
+        const pchContent  = document.getElementById('pchContent');
+        if (!pchSection || !pchContent) return;
+
+        if (data.length < 10) {
+            pchSection.style.display = 'none';
+            return;
+        }
+        pchSection.style.display = '';
+
+        const selN = pchPeriodSelect ? pchPeriodSelect.value : '100';
+        const { results, n, mu, sigma, theoMaxGap, theoMaxRun } = calcPCH(data, selN);
+
+        const hot     = results.filter(r => r.signals.includes('hot'));
+        const cold    = results.filter(r => r.signals.includes('cold'));
+        const streak  = results.filter(r => r.signals.includes('streak') && !r.signals.includes('cold'));
+        const cluster = results.filter(r => r.signals.includes('cluster') && !r.signals.includes('hot'));
+
+        // 動態理論門檻
+        const theoGap = Math.ceil(theoMaxGap);
+        const theoRun = Math.ceil(theoMaxRun) + 1;
+
+        // 同步更新標題文字
+        const h2 = pchSection.querySelector('h2');
+        if (h2) h2.textContent = `📐 Poisson 叢集啟發分析（最近 ${n} 期）`;
+
+        let html = '';
+
+        // ── 統計摘要卡 ─────────────────────────────────────────────
+        html += `<div class="pch-meta-bar">`;
+        html += `<div class="pch-meta-item"><span class="pch-meta-label">分析期數</span><span class="pch-meta-val">${n} 期</span></div>`;
+        html += `<div class="pch-meta-item"><span class="pch-meta-label">期望頻率 μ</span><span class="pch-meta-val">${mu} 次</span></div>`;
+        html += `<div class="pch-meta-item"><span class="pch-meta-label">標準差 σ</span><span class="pch-meta-val">${sigma}</span></div>`;
+        html += `<div class="pch-meta-item"><span class="pch-meta-label">理論最大冷條</span><span class="pch-meta-val">~${theoGap} 期</span></div>`;
+        html += `<div class="pch-meta-item"><span class="pch-meta-label">理論最大熱連</span><span class="pch-meta-val">~${theoRun - 1} 期</span></div>`;
+        html += `</div>`;
+
+        // ── PCH 信號列表 ────────────────────────────────────────────
+        const signalGroups = [
+            { key: 'hot',     list: hot,     icon: '🔥', label: 'PCH 過熱信號', desc: `Z ≥ +2.0（近 ${n} 期出現次數異常偏高）`, cls: 'pch-signal-hot' },
+            { key: 'cold',    list: cold,    icon: '🧊', label: 'PCH 過冷信號', desc: `Z ≤ -2.0（近 ${n} 期出現次數異常偏低）`, cls: 'pch-signal-cold' },
+            { key: 'streak',  list: streak,  icon: '⏳', label: 'PCH 超長斷號', desc: `當前冷條 ≥ ${theoGap} 期（超過理論最大值）`, cls: 'pch-signal-streak' },
+            { key: 'cluster', list: cluster, icon: '🌀', label: 'PCH 叢集出現', desc: `最長熱連 ≥ ${theoRun} 期（超出期望值）`, cls: 'pch-signal-cluster' },
+        ];
+
+        for (const g of signalGroups) {
+            html += `<div class="pch-group ${g.cls}">`;
+            html += `<div class="pch-group-header"><span class="pch-group-icon">${g.icon}</span><div>`;
+            html += `<span class="pch-group-label">${g.label}</span>`;
+            html += `<span class="pch-group-desc">${g.desc}</span>`;
+            html += `</div><span class="pch-group-count">${g.list.length} 個號碼</span></div>`;
+
+            if (g.list.length === 0) {
+                html += `<div class="pch-no-signal">本期無此信號</div>`;
+            } else {
+                html += `<div class="pch-card-list">`;
+                for (const r of g.list) {
+                    const zLabel = r.z >= 0 ? `+${r.z}` : `${r.z}`;
+                    const pLabel = g.key === 'hot' || g.key === 'cluster'
+                        ? `p=${(r.pHot * 100).toFixed(1)}%`
+                        : `p=${(r.pCold * 100).toFixed(1)}%`;
+                    const zRatio  = Math.min(Math.abs(r.z) / 4, 1);
+                    const zColor  = r.z >= 0 ? heatColor(0.6 + zRatio * 0.4) : `hsl(210,80%,${60 - zRatio * 20}%)`;
+                    const zFg     = r.z >= 0 ? '#fff' : '#fff';
+
+                    html += `<div class="pch-card">`;
+                    html += `<span class="pch-num" style="background:${zColor};color:${zFg}">${r.number}</span>`;
+                    html += `<div class="pch-stats">`;
+                    html += `<span class="pch-stat-z ${r.z >= 0 ? 'pos' : 'neg'}">${zLabel}σ</span>`;
+                    html += `<span class="pch-stat-freq">${r.freq} 次</span>`;
+                    if (g.key === 'streak') html += `<span class="pch-stat-extra">冷條 ${r.currentGap} 期</span>`;
+                    if (g.key === 'cluster') html += `<span class="pch-stat-extra">熱連 ${r.maxRun} 期</span>`;
+                    html += `<span class="pch-stat-p">${pLabel}</span>`;
+                    html += `</div></div>`;
+                }
+                html += `</div>`;
+            }
+            html += `</div>`;
+        }
+
+        // ── Z 分數 1-80 全覽 ────────────────────────────────────────
+        html += `<div class="pch-zscore-section">`;
+        html += `<h3 class="pch-zscore-title">Z 分數全覽（1–80，依號碼排序）</h3>`;
+        html += `<p class="pch-zscore-hint">格子顏色代表 Z 分數；<span style="color:#f87171">紅色</span>偏熱、<span style="color:#60a5fa">藍色</span>偏冷</p>`;
+        html += `<div class="pch-z-grid">`;
+        const byNum = [...results].sort((a, b) => a.number - b.number);
+        for (const r of byNum) {
+            const zAbs   = Math.min(Math.abs(r.z) / 3, 1);
+            const bg     = r.z >= 0 ? `hsl(0,${50 + zAbs * 40}%,${90 - zAbs * 50}%)` : `hsl(210,${50 + zAbs * 40}%,${90 - zAbs * 50}%)`;
+            const fg     = zAbs > 0.5 ? '#fff' : '#1e293b';
+            const sigStr = r.signals.length ? r.signals.map(s => ({hot:'🔥',cold:'🧊',streak:'⏳',cluster:'🌀'}[s]||'')).join('') : '';
+            html += `<div class="pch-z-cell" style="background:${bg};color:${fg}"
+                title="號碼 ${r.number}：${r.freq}次，Z=${r.z >= 0 ? '+' : ''}${r.z}，冷條${r.currentGap}期，熱連${r.maxRun}期">
+                <span class="pch-z-num">${r.number}</span>
+                <span class="pch-z-val">${r.z >= 0 ? '+' : ''}${r.z}</span>
+                ${sigStr ? `<span class="pch-z-sig">${sigStr}</span>` : ''}
+            </div>`;
+        }
+        html += `</div></div>`;
+
+        // ── PCH 原理簡說 ────────────────────────────────────────────
+        html += `<div class="pch-explainer">`;
+        html += `<strong>什麼是 Poisson Clumping Heuristic？</strong>`;
+        html += `在獨立事件序列中（p = ${EXPECTED_PROB}，每期抽 ${NUMBERS_PER_DRAW} / ${TOTAL_NUMBERS}），`;
+        html += `PCH 預測稀少事件傾向「叢集」出現：${n} 期內每個號碼期望出現 ${mu} 次（σ = ${sigma}）。`;
+        html += `Z ≥ ±2 代表統計顯著；冷條 ≥ ${theoGap} 期、熱連 ≥ ${theoRun} 期超出理論期望值。`;
+        html += `⚠️ 請記住：每期開獎為獨立隨機事件，歷史統計無法改變未來機率。`;
+        html += `</div>`;
+
+        pchContent.innerHTML = html;
     }
 
     /** Calculate moving-window trend for a specific number */
@@ -1053,7 +1256,8 @@
 
         if (draws.length === 0) {
             // 隱藏各分析區塊
-            [heatmapSection, rankingSection, suggestionSection, disclaimer, checkPrizeSection, distributionHeatmapSection, cooccurrenceSection].forEach(el => el.style.display = 'none');
+            const pchSec = document.getElementById('pchSection');
+            [heatmapSection, rankingSection, suggestionSection, disclaimer, checkPrizeSection, distributionHeatmapSection, cooccurrenceSection, pchSec].forEach(el => el && (el.style.display = 'none'));
             // 顯示空狀態
             if (emptyState) emptyState.style.display = '';
             dataSummary.innerHTML = '<span style="opacity:.6">尚未載入資料</span>';
@@ -1123,6 +1327,9 @@
         cooccurrenceSection.style.display = '';
         renderCoocPicker();
         renderCoocResult();
+
+        // PCH 分析
+        renderPCH(draws);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1362,6 +1569,13 @@
             closeDistFullscreen();
         }
     });
+
+    // PCH period selector
+    if (pchPeriodSelect) {
+        pchPeriodSelect.addEventListener('change', () => {
+            if (draws.length > 0) renderPCH(draws);
+        });
+    }
 
     // Co-occurrence period selector
     coocPeriodSelect.addEventListener('change', () => {
